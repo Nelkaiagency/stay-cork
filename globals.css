@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-primary: #0f172a;
+  --brand-secondary: #3b82f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Safe area insets for PWA on mobile */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
