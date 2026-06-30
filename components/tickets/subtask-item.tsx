@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Circle, Lock, MinusCircle, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { Camera, Circle, Lock, MinusCircle, ChevronDown, ChevronUp, CheckCircle2, Trash2 } from "lucide-react";
 import { type TicketSubtask, type TicketPhoto, type SubtaskStatus } from "@/lib/types/database";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,9 +33,11 @@ interface SubtaskItemProps {
   isAdmin?: boolean;
   assignableStaff?: { id: string; name: string; skills?: string[] | null }[];
   onAssign?: (subtaskId: string, staffId: string | null) => void;
+  userId?: string;
   onStatusChange: (subtask: TicketSubtask, newStatus: SubtaskStatus) => Promise<void>;
   onSkip: (subtask: TicketSubtask, reason: string) => Promise<void>;
   onPhotoUpload: (subtaskId: string, file: File) => Promise<void>;
+  onDeletePhoto?: (photo: TicketPhoto) => void;
 }
 
 export function SubtaskItem({
@@ -48,10 +50,12 @@ export function SubtaskItem({
   checklist = false,
   isAdmin = false,
   assignableStaff = [],
+  userId,
   onAssign,
   onStatusChange,
   onSkip,
   onPhotoUpload,
+  onDeletePhoto,
 }: SubtaskItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -178,15 +182,26 @@ export function SubtaskItem({
           {photosForSubtask.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1">
               {photosForSubtask.filter((p) => p.url).map((photo) => (
-                <a key={photo.id} href={photo.url!} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                  <Image
-                    src={photo.url!}
-                    alt="Subtask photo"
-                    width={72}
-                    height={72}
-                    className="rounded-lg object-cover w-[72px] h-[72px]"
-                  />
-                </a>
+                <div key={photo.id} className="relative shrink-0">
+                  <a href={photo.url!} target="_blank" rel="noopener noreferrer" className="block">
+                    <Image
+                      src={photo.url!}
+                      alt="Subtask photo"
+                      width={72}
+                      height={72}
+                      className="rounded-lg object-cover w-[72px] h-[72px]"
+                    />
+                  </a>
+                  {onDeletePhoto && (isAdmin || userId === photo.uploaded_by) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeletePhoto(photo); }}
+                      aria-label="Delete photo"
+                      className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/50 text-white hover:bg-red-500 active:bg-red-600 transition-colors"
+                    >
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}

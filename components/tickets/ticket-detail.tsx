@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2, Check } from "lucide-react";
 import { deleteTicketPhoto } from "@/app/(app)/tickets/[id]/actions";
 import { createClient } from "@/lib/supabase/client";
 import { type Ticket, type TicketSubtask, type TicketPhoto, type SubtaskStatus, type TicketStatus, type TicketActivity, type SupplyRun } from "@/lib/types/database";
@@ -11,7 +11,10 @@ import { SupplySection } from "./supply-section";
 import { formatDistanceToNow } from "@/lib/utils-date";
 import { getLabelClasses } from "@/lib/label-colors";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ErrorToast } from "@/components/ui/error-toast";
+import { SuccessToast } from "@/components/ui/success-toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SubtaskItem } from "./subtask-item";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +72,12 @@ export function TicketDetail({
   );
   const [assigning, setAssigning] = useState(false);
   const [deletedPhotoIds, setDeletedPhotoIds] = useState<Set<string>>(new Set());
-  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+  const [confirmDialog, setConfirmDialog] = useState<
+    { type: "single"; photo: TicketPhoto } | { type: "batch" } | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Build a lookup for quick dependency checking
   const subtaskById = Object.fromEntries(localSubtasks.map((s) => [s.id, s]));
@@ -250,25 +258,63 @@ export function TicketDetail({
     router.refresh();
   }
 
-  async function handleDeletePhoto(photo: TicketPhoto) {
-    if (!window.confirm("Delete this photo? This can't be undone.")) return;
+  function openDeleteConfirm(photo: TicketPhoto) {
+    setConfirmDialog({ type: "single", photo });
+  }
 
-    setDeletingPhotoId(photo.id);
+  function togglePhotoSelect(photoId: string) {
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  }
+
+  async function performDelete() {
+    if (!confirmDialog) return;
+
+    const targets =
+      confirmDialog.type === "single"
+        ? [confirmDialog.photo]
+        : visiblePhotos.filter((p) => selectedPhotoIds.has(p.id));
+
+    setDeleting(true);
     setError(null);
-    setDeletedPhotoIds((prev) => new Set(prev).add(photo.id));
 
-    try {
-      await deleteTicketPhoto(photo.id, photo.storage_path);
-      router.refresh();
-    } catch (err) {
+    // Optimistic hide all targets immediately
+    setDeletedPhotoIds((prev) => {
+      const next = new Set(prev);
+      targets.forEach((p) => next.add(p.id));
+      return next;
+    });
+
+    const results = await Promise.allSettled(
+      targets.map((p) => deleteTicketPhoto(p.id, p.storage_path))
+    );
+
+    const failed = targets.filter((_, i) => results[i].status === "rejected");
+    const succeeded = targets.filter((_, i) => results[i].status === "fulfilled");
+
+    setDeleting(false);
+    setConfirmDialog(null);
+
+    if (failed.length > 0) {
+      // Restore only the ones that actually failed
       setDeletedPhotoIds((prev) => {
         const next = new Set(prev);
-        next.delete(photo.id);
+        failed.forEach((p) => next.delete(p.id));
         return next;
       });
-      setError(err instanceof Error ? err.message : "Failed to delete photo");
-    } finally {
-      setDeletingPhotoId(null);
+      setError(`Failed to delete ${failed.length} photo${failed.length > 1 ? "s" : ""}`);
+    }
+
+    if (succeeded.length > 0) {
+      setSelectedPhotoIds(new Set());
+      setSuccessMessage(
+        succeeded.length === 1 ? "Photo deleted" : `${succeeded.length} photos deleted`
+      );
+      router.refresh();
     }
   }
 
@@ -403,11 +449,13 @@ export function TicketDetail({
                     uploading={uploading === subtask.id}
                     checklist={!isSequenced}
                     isAdmin={isAdmin}
+                    userId={userId}
                     assignableStaff={isSequenced ? assignableStaff : []}
                     onAssign={isSequenced ? handleSubtaskAssign : undefined}
                     onStatusChange={handleStatusChange}
                     onSkip={handleSkip}
                     onPhotoUpload={handlePhotoUpload}
+                    onDeletePhoto={openDeleteConfirm}
                   />
                 ))}
               </List>
@@ -442,43 +490,94 @@ export function TicketDetail({
 
         {/* Photos gallery */}
         {visiblePhotos.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-              All Photos ({visiblePhotos.length})
-            </h2>
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                All Photos ({visiblePhotos.length})
+              </h2>
+              {selectedPhotoIds.size > 0 && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setConfirmDialog({ type: "batch" })}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete {selectedPhotoIds.size} selected
+                </Button>
+              )}
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
-              {visiblePhotos.filter((p) => p.url).map((photo) => (
-                <div key={photo.id} className="relative">
-                  <a href={photo.url!} target="_blank" rel="noopener noreferrer" className="block">
-                    <Image
-                      src={photo.url!}
-                      alt="Ticket photo"
-                      width={120}
-                      height={120}
-                      className="rounded-lg object-cover aspect-square w-full"
-                    />
-                  </a>
-                  {(isAdmin || userId === photo.uploaded_by) && (
-                    <button
-                      onClick={() => handleDeletePhoto(photo)}
-                      disabled={deletingPhotoId === photo.id}
-                      aria-label="Delete photo"
-                      className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm disabled:opacity-50 transition-opacity"
-                    >
-                      {deletingPhotoId === photo.id ? (
-                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      ) : (
+              {visiblePhotos.filter((p) => p.url).map((photo) => {
+                const canDelete = isAdmin || userId === photo.uploaded_by;
+                const isSelected = selectedPhotoIds.has(photo.id);
+                return (
+                  <div key={photo.id} className="relative">
+                    {/* Select checkbox — only for photos this user can delete */}
+                    {canDelete && (
+                      <button
+                        onClick={() => togglePhotoSelect(photo.id)}
+                        aria-label={isSelected ? "Deselect photo" : "Select photo"}
+                        className={cn(
+                          "absolute top-1 left-1 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 shadow-sm transition-colors",
+                          isSelected
+                            ? "bg-[var(--brand-primary)] border-[var(--brand-primary)]"
+                            : "bg-white/80 border-white"
+                        )}
+                      >
+                        {isSelected && <Check className="h-3 w-3 text-white" />}
+                      </button>
+                    )}
+
+                    <a href={photo.url!} target="_blank" rel="noopener noreferrer" className="block">
+                      <Image
+                        src={photo.url!}
+                        alt="Ticket photo"
+                        width={120}
+                        height={120}
+                        className={cn(
+                          "rounded-lg object-cover aspect-square w-full transition-opacity",
+                          isSelected && "opacity-60"
+                        )}
+                      />
+                    </a>
+
+                    {canDelete && (
+                      <button
+                        onClick={() => openDeleteConfirm(photo)}
+                        aria-label="Delete photo"
+                        className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white hover:bg-red-500 active:bg-red-600 transition-colors"
+                      >
                         <Trash2 className="h-3 w-3" />
-                      )}
-                    </button>
-                  )}
-                </div>
-              ))}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
       </div>
 
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={
+          confirmDialog?.type === "batch"
+            ? `Delete ${selectedPhotoIds.size} photo${selectedPhotoIds.size > 1 ? "s" : ""}?`
+            : "Delete photo?"
+        }
+        description="This can't be undone."
+        confirmLabel={
+          confirmDialog?.type === "batch"
+            ? `Delete ${selectedPhotoIds.size}`
+            : "Delete"
+        }
+        loading={deleting}
+        onConfirm={performDelete}
+        onCancel={() => !deleting && setConfirmDialog(null)}
+      />
+
+      <SuccessToast message={successMessage} onDismiss={() => setSuccessMessage(null)} />
       <ErrorToast message={error} onDismiss={() => setError(null)} />
     </div>
   );
