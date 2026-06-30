@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
+import { deleteTicketPhoto } from "@/app/(app)/tickets/[id]/actions";
 import { createClient } from "@/lib/supabase/client";
 import { type Ticket, type TicketSubtask, type TicketPhoto, type SubtaskStatus, type TicketStatus, type TicketActivity, type SupplyRun } from "@/lib/types/database";
 import { SupplySection } from "./supply-section";
@@ -67,6 +68,8 @@ export function TicketDetail({
     ticket.assigned_staff?.name ?? null
   );
   const [assigning, setAssigning] = useState(false);
+  const [deletedPhotoIds, setDeletedPhotoIds] = useState<Set<string>>(new Set());
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
 
   // Build a lookup for quick dependency checking
   const subtaskById = Object.fromEntries(localSubtasks.map((s) => [s.id, s]));
@@ -247,6 +250,28 @@ export function TicketDetail({
     router.refresh();
   }
 
+  async function handleDeletePhoto(photo: TicketPhoto) {
+    setDeletingPhotoId(photo.id);
+    setError(null);
+    setDeletedPhotoIds((prev) => new Set(prev).add(photo.id));
+
+    try {
+      await deleteTicketPhoto(photo.id);
+      router.refresh();
+    } catch (err) {
+      setDeletedPhotoIds((prev) => {
+        const next = new Set(prev);
+        next.delete(photo.id);
+        return next;
+      });
+      setError(err instanceof Error ? err.message : "Failed to delete photo");
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  }
+
+  const visiblePhotos = photos.filter((p) => !deletedPhotoIds.has(p.id));
+
   return (
     <div className="flex flex-col max-w-2xl mx-auto">
       {/* Header */}
@@ -372,7 +397,7 @@ export function TicketDetail({
                     index={i + 1}
                     blocked={isBlocked(subtask)}
                     dependency={subtask.depends_on ? subtaskById[subtask.depends_on] : null}
-                    photosForSubtask={photos.filter((p) => p.subtask_id === subtask.id)}
+                    photosForSubtask={visiblePhotos.filter((p) => p.subtask_id === subtask.id)}
                     uploading={uploading === subtask.id}
                     checklist={!isSequenced}
                     isAdmin={isAdmin}
@@ -414,22 +439,36 @@ export function TicketDetail({
         )}
 
         {/* Photos gallery */}
-        {photos.length > 0 && (
+        {visiblePhotos.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-              All Photos ({photos.length})
+              All Photos ({visiblePhotos.length})
             </h2>
             <div className="grid grid-cols-3 gap-2">
-              {photos.filter((p) => p.url).map((photo) => (
-                <a key={photo.id} href={photo.url!} target="_blank" rel="noopener noreferrer">
-                  <Image
-                    src={photo.url!}
-                    alt="Ticket photo"
-                    width={120}
-                    height={120}
-                    className="rounded-lg object-cover aspect-square w-full"
-                  />
-                </a>
+              {visiblePhotos.filter((p) => p.url).map((photo) => (
+                <div key={photo.id} className="relative">
+                  <a href={photo.url!} target="_blank" rel="noopener noreferrer" className="block">
+                    <Image
+                      src={photo.url!}
+                      alt="Ticket photo"
+                      width={120}
+                      height={120}
+                      className="rounded-lg object-cover aspect-square w-full"
+                    />
+                  </a>
+                  <button
+                    onClick={() => handleDeletePhoto(photo)}
+                    disabled={deletingPhotoId === photo.id}
+                    aria-label="Delete photo"
+                    className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm disabled:opacity-50 transition-opacity"
+                  >
+                    {deletingPhotoId === photo.id ? (
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </button>
+                </div>
               ))}
             </div>
           </section>
