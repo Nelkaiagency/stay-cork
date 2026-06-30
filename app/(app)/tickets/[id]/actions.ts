@@ -4,14 +4,17 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/getCurrentBusiness";
 
-export async function deleteTicketPhoto(photoId: string): Promise<void> {
+export async function deleteTicketPhoto(
+  photoId: string,
+  storagePath: string,
+): Promise<void> {
   const { businessId } = await getCurrentBusiness();
   const supabase = createClient();
 
-  // Fetch the photo to get its storage path and verify it belongs to this business
+  // Minimal fetch: verify the photo belongs to this business, get ticket_id for revalidation
   const { data: photo, error: fetchError } = await supabase
     .from("ticket_photos")
-    .select("id, storage_path, ticket_id, ticket:tickets!ticket_id(business_id)")
+    .select("ticket_id, ticket:tickets!ticket_id(business_id)")
     .eq("id", photoId)
     .single();
 
@@ -21,16 +24,20 @@ export async function deleteTicketPhoto(photoId: string): Promise<void> {
     ?.business_id;
   if (ticketBizId !== businessId) throw new Error("Not authorized");
 
-  // Delete the DB row
+  // Remove from storage first — use the path from the client row directly
+  const { error: storageError } = await supabase.storage
+    .from("ticket-photos")
+    .remove([storagePath]);
+
+  if (storageError) throw new Error(`Storage error: ${storageError.message}`);
+
+  // Then delete the DB row
   const { error: dbError } = await supabase
     .from("ticket_photos")
     .delete()
     .eq("id", photoId);
 
   if (dbError) throw new Error(dbError.message);
-
-  // Remove from storage (best-effort — don't fail if the file is already gone)
-  await supabase.storage.from("ticket-photos").remove([photo.storage_path]);
 
   revalidatePath(`/tickets/${photo.ticket_id}`);
 }

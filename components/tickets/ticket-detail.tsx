@@ -251,12 +251,14 @@ export function TicketDetail({
   }
 
   async function handleDeletePhoto(photo: TicketPhoto) {
+    if (!window.confirm("Delete this photo? This can't be undone.")) return;
+
     setDeletingPhotoId(photo.id);
     setError(null);
     setDeletedPhotoIds((prev) => new Set(prev).add(photo.id));
 
     try {
-      await deleteTicketPhoto(photo.id);
+      await deleteTicketPhoto(photo.id, photo.storage_path);
       router.refresh();
     } catch (err) {
       setDeletedPhotoIds((prev) => {
@@ -456,18 +458,20 @@ export function TicketDetail({
                       className="rounded-lg object-cover aspect-square w-full"
                     />
                   </a>
-                  <button
-                    onClick={() => handleDeletePhoto(photo)}
-                    disabled={deletingPhotoId === photo.id}
-                    aria-label="Delete photo"
-                    className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm disabled:opacity-50 transition-opacity"
-                  >
-                    {deletingPhotoId === photo.id ? (
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </button>
+                  {(isAdmin || userId === photo.uploaded_by) && (
+                    <button
+                      onClick={() => handleDeletePhoto(photo)}
+                      disabled={deletingPhotoId === photo.id}
+                      aria-label="Delete photo"
+                      className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm disabled:opacity-50 transition-opacity"
+                    >
+                      {deletingPhotoId === photo.id ? (
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
