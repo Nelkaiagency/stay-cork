@@ -42,7 +42,6 @@ export async function createTicketAction(formData: FormData): Promise<string> {
   if (!ticketId) throw new Error("Ticket was created but no ID was returned");
 
   revalidatePath("/dashboard");
-  revalidatePath("/tickets");
 
   return ticketId;
 }
