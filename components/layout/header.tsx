@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { LogOut } from "lucide-react";
+import { Building2, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { type BrandConfig } from "@/lib/config/white-label";
 import { NotificationBell } from "./notification-bell";
@@ -23,32 +23,31 @@ export function Header({ brand, appUserId }: HeaderProps) {
   }
 
   return (
-    <header
-      className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm"
-      style={{ borderTopColor: "var(--brand-primary)", borderTopWidth: 3 }}
-    >
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-[#0d2b54] px-4 text-white shadow-sm lg:hidden">
       <div className="flex items-center gap-3">
         {brand.logoUrl ? (
-          <Image src={brand.logoUrl} alt={brand.name} width={28} height={28} className="rounded" />
+          <Image src={brand.logoUrl} alt={brand.name} width={32} height={32} className="rounded-lg" />
         ) : (
-          <div
-            className="h-7 w-7 rounded flex items-center justify-center text-white text-xs font-bold"
-            style={{ backgroundColor: "var(--brand-primary)" }}
-          >
-            {brand.name[0]}
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#efb54b]/30 bg-[#efb54b]/10 text-[#efb54b]">
+            <Building2 className="h-5 w-5" />
           </div>
         )}
-        <span className="font-semibold text-slate-900 text-sm">{brand.name}</span>
+        <div>
+          <p className="text-sm font-semibold leading-tight">{brand.name}</p>
+          <p className="text-[11px] text-blue-100/60">Operations</p>
+        </div>
       </div>
 
       <nav className="flex items-center gap-1">
-        <NotificationBell appUserId={appUserId} />
+        <div className="text-white [&_button]:text-white [&_svg]:text-white">
+          <NotificationBell appUserId={appUserId} />
+        </div>
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+          aria-label="Sign out"
+          className="rounded-lg p-2 text-blue-100/75 transition hover:bg-white/10 hover:text-white"
         >
           <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">Sign out</span>
         </button>
       </nav>
     </header>
