@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Building2,
@@ -43,6 +43,7 @@ function roleLabel(role: string) {
 
 export function DesktopSidebar({ brand, userName, role }: DesktopSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = createClient();
   const visibleItems = items.filter((item) => !item.hiddenFor.includes(role));
@@ -72,7 +73,14 @@ export function DesktopSidebar({ brand, userName, role }: DesktopSidebarProps) {
       <nav className="flex-1 space-y-1.5 px-3 py-4">
         {visibleItems.map(({ href, label, icon: Icon }) => {
           const hrefPath = href.split("?")[0];
-          const active = pathname === hrefPath || (hrefPath !== "/dashboard" && pathname.startsWith(`${hrefPath}/`));
+          const isRenovationLink = href.includes("type=renovation");
+          const viewingRenovations = pathname === "/tickets" && searchParams.get("type") === "renovation";
+          const active = isRenovationLink
+            ? viewingRenovations
+            : hrefPath === "/tickets"
+              ? pathname === "/tickets" && !viewingRenovations
+              : pathname === hrefPath || (hrefPath !== "/dashboard" && pathname.startsWith(`${hrefPath}/`));
+
           return (
             <Link
               key={href}
