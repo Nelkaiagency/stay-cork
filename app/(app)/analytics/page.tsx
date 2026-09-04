@@ -21,19 +21,27 @@ const TicketBreakdownCharts = dynamic(
 );
 
 function ChartSkeleton({ height }: { height: number }) {
-  return (
-    <div
-      className="w-full animate-pulse rounded-lg bg-slate-50"
-      style={{ height }}
-    />
-  );
+  return <div className="w-full animate-pulse rounded-xl bg-slate-50" style={{ height }} />;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  className = "",
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</h2>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">{children}</div>
+    <section className={`rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm ${className}`}>
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      </div>
+      {children}
     </section>
   );
 }
@@ -43,9 +51,9 @@ export default async function AnalyticsPage() {
   const supabase = createClient();
 
   const [
-    { data: trendRaw,     error: trendErr },
-    { data: stagesRaw,    error: stagesErr },
-    { data: workloadRaw,  error: workloadErr },
+    { data: trendRaw, error: trendErr },
+    { data: stagesRaw, error: stagesErr },
+    { data: workloadRaw, error: workloadErr },
     { data: breakdownRaw, error: breakdownErr },
   ] = await Promise.all([
     supabase.rpc("get_ticket_trend", { p_business_id: businessId, p_days: 30 }),
@@ -54,48 +62,50 @@ export default async function AnalyticsPage() {
     supabase.rpc("get_ticket_breakdown", { p_business_id: businessId }),
   ]);
 
-  // Surface RPC errors to the server log so they're never silently swallowed
-  if (trendErr)     console.error("[analytics] get_ticket_trend:",     trendErr.message);
-  if (stagesErr)    console.error("[analytics] get_stage_durations:",   stagesErr.message);
-  if (workloadErr)  console.error("[analytics] get_staff_workload:",    workloadErr.message);
-  if (breakdownErr) console.error("[analytics] get_ticket_breakdown:",  breakdownErr.message);
+  if (trendErr) console.error("[analytics] get_ticket_trend:", trendErr.message);
+  if (stagesErr) console.error("[analytics] get_stage_durations:", stagesErr.message);
+  if (workloadErr) console.error("[analytics] get_staff_workload:", workloadErr.message);
+  if (breakdownErr) console.error("[analytics] get_ticket_breakdown:", breakdownErr.message);
 
-  // Coerce all numeric fields to Number — Postgres bigint can arrive as a
-  // string from the JS client, and recharts 3 does not auto-cast strings.
-  const trend: TrendRow[] = ((trendRaw ?? []) as TrendRow[]).map((r) => ({
-    day: r.day,
-    opened_count:   Number(r.opened_count),
-    resolved_count: Number(r.resolved_count),
+  const trend: TrendRow[] = ((trendRaw ?? []) as TrendRow[]).map((row) => ({
+    day: row.day,
+    opened_count: Number(row.opened_count),
+    resolved_count: Number(row.resolved_count),
   }));
-  const stages   = (stagesRaw   ?? []) as StageDurationRow[];
+  const stages = (stagesRaw ?? []) as StageDurationRow[];
   const workload = (workloadRaw ?? []) as StaffWorkloadRow[];
   const breakdown = (breakdownRaw ?? []) as BreakdownRow[];
 
   return (
-    <div className="flex flex-col gap-6 p-4 max-w-2xl mx-auto">
-      <h1 className="text-lg font-bold text-slate-900">Analytics</h1>
+    <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+      <div className="mb-5 lg:hidden">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Analytics</h1>
+        <p className="mt-1 text-sm text-slate-500">Operational trends, delays and workload.</p>
+      </div>
 
-      <Section title={`Ticket trend — last 30 days${trend.length ? ` · ${trend.length} days` : ""}`}>
-        <TicketTrendChart data={trend} />
-      </Section>
-
-      {stages.length > 0 && (
-        <Section title="Avg stage duration">
-          <StageDurationChart data={stages} />
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <Section title="Open vs Resolved" subtitle={`Last 30 days${trend.length ? ` · ${trend.length} days of data` : ""}`}>
+          <TicketTrendChart data={trend} />
         </Section>
-      )}
 
-      {workload.length > 0 && (
-        <Section title="Staff workload">
-          <StaffWorkloadList data={workload} />
-        </Section>
-      )}
+        {stages.length > 0 && (
+          <Section title="Average Stage Duration" subtitle="Where renovation work is taking the longest">
+            <StageDurationChart data={stages} />
+          </Section>
+        )}
 
-      {breakdown.length > 0 && (
-        <Section title="Ticket breakdown">
-          <TicketBreakdownCharts data={breakdown} />
-        </Section>
-      )}
+        {workload.length > 0 && (
+          <Section title="Staff Workload" subtitle="Active work by team member">
+            <StaffWorkloadList data={workload} />
+          </Section>
+        )}
+
+        {breakdown.length > 0 && (
+          <Section title="Ticket Breakdown" subtitle="Current work split by type and status">
+            <TicketBreakdownCharts data={breakdown} />
+          </Section>
+        )}
+      </div>
     </div>
   );
 }
