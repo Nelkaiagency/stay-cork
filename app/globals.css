@@ -3,12 +3,36 @@
 @tailwind utilities;
 
 :root {
-  --brand-primary: #0f172a;
-  --brand-secondary: #3b82f6;
+  --brand-primary: #0d2b54;
+  --brand-secondary: #e2ad43;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  background: #f6f8fb;
+}
+
+body {
+  margin: 0;
+  background: #f6f8fb;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: rgba(13, 43, 84, 0.16);
 }
 
 /* Safe area insets for PWA on mobile */
